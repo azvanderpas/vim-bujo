@@ -5,6 +5,7 @@
 " Get custom configs
 let g:bujo#todo_file_path = get(g:, "bujo#todo_file_path", $HOME . "/.cache/bujo")
 let g:bujo#window_width = get(g:, "bujo#window_width", 30)
+let g:bujo#templates_file_path = expand('<sfile>:p:h:h') . "\\templates"
 
 " Make bujo directory if it doesn't exist"
 if empty(glob(g:bujo#todo_file_path))
@@ -13,7 +14,7 @@ endif
 
 " InGitRepository() tells us if the directory we are currently working in
 " is a git repository. It makes use of the 'git rev-parse --is-inside-work-tree'
-" command. This command outputs true to the shell if so, and a STDERR message 
+" command. This command outputs true to the shell if so, and a STDERR message
 " otherwise.
 "
 " We will use this function to know whether we should open a specific
@@ -42,20 +43,20 @@ endfunction
 
 " GetBujoFilePath() returns which file path we will be using. If we are in a
 " git repository, we return the directory for that specific git repo.
-" Otherwise, we return the general file path. 
+" Otherwise, we return the general file path.
 "
 " If we are passed an argument, it means that the user wants to open the
 " general bujo file, so we also return the general file path in that case
-function s:GetBujoFilePath(general)
+function s:GetBujoFilePath(general, section)
   if a:general || !s:InGitRepository()
-    return g:bujo#todo_file_path . "/todo.md"
+    return g:bujo#todo_file_path . "/" . a:section . ".md"
   else
     let repo_name = s:GetToplevelFolder()
-    let todo_path = g:bujo#todo_file_path . "/" . repo_name 
+    let todo_path = g:bujo#todo_file_path . "/" . repo_name
     if empty(glob(todo_path))
       call mkdir(todo_path)
     endif
-    return todo_path . "/todo.md"
+    return todo_path . "/" . a:section . ".md"
   endif
 endfunction
 
@@ -64,21 +65,77 @@ endfunction
 " If we are in a git repository, we open the todo.md for that git repository.
 " Otherwise, we open the global todo file.
 "
-" Paramaters : 
-" 
+" Paramaters :
+"
 "   mods - allows a user to use <mods> (see :h mods)
-" 
+"
 "   ... - any parameter after calling :Todo will mean that the user wants
 "   us to open the general file path. We check this with a:0
 function s:OpenTodo(mods, ...)
   let general_bool = a:0
-  let todo_path = s:GetBujoFilePath(general_bool)
+  let todo_path = s:GetBujoFilePath(general_bool, "todo")
+  let d = strftime("%m/%d/%Y")
+  if empty(glob(todo_path))
+    let f = readfile(g:bujo#templates_file_path . "\\md.skeleton")
+    let f[6] = substitute(f[6], "Date", d, 'g')
+    call writefile(f, todo_path, 'B')
+  else
+    let f = readfile(todo_path)
+    if index(f, d) == -1
+      let w = f[0:5] +  [d] + f[6:]
+      call writefile(w, todo_path, 'B')
+    endif
+  endif
+
   exe a:mods . " " . g:bujo#window_width "vs  " . todo_path
+endfunction
+
+function s:OpenMonth(mods, ...)
+  let general_bool = a:0
+  let month_path = s:GetBujoFilePath(general_bool, strftime("%Y%B"))
+  if empty(glob(month_path))
+    let y = strftime("%Y")
+    let m = strftime("%B")
+    call writefile([m . " " . y], month_path)
+    let ndays = substitute(readfile(g:bujo#templates_file_path . "\\md.months")[0], ".*". m ."[A-z|]\\+\\s\\(\\d\\+\\).*","\\1", 'g')
+    if m == "February" && y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)
+      "leap years
+      let ndays = ndays + 1
+    endif
+    for i in range(1, ndays)
+      call writefile([printf("%02d",i) . strftime("%a", localtime()-((strftime("%d")-i)*24*60*60)) ], month_path, 'a')
+    endfor
+  endif
+  exe a:mods . " " . g:bujo#window_width "vs  " . month_path
+  execute "normal /" . strftime("%d") . "\<CR>"
+endfunction
+
+function s:OpenFutureLog(mods, ...)
+  let general_bool = a:0
+  let future_log_path = s:GetBujoFilePath(general_bool, "FutureLog")
+  if empty(glob(future_log_path))
+    call writefile(readfile(g:bujo#templates_file_path . "\\md.futurelog"), future_log_path)
+    for i in range(0, 11)
+      call writefile([strftime("%B %Y", localtime()-((strftime("%d")-1-i*32)*24*60*60)) ], future_log_path, 'a')
+    endfor
+  endif
+  exe a:mods . " " . g:bujo#window_width "vs  " . future_log_path
+  execute "normal /" . strftime("%B %Y") . "\<CR>"
 endfunction
 
 if !exists(":Todo")
   command -nargs=? Todo :call s:OpenTodo(<q-mods>, <f-args>)
 endif
 
-" Update title upon file create. 
-autocmd bufnewfile todo.md call append(0, '#' . split(expand('%:p:h:t'), '\v\n')[0] . " todo")  
+if !exists(":Monthly")
+  command -nargs=? Monthly :call s:OpenMonth(<q-mods>, <f-args>)
+endif
+
+if !exists(":FutureLog")
+  command -nargs=? FutureLog :call s:OpenFutureLog(<q-mods>, <f-args>)
+endif
+
+
+
+
+
