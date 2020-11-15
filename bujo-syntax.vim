@@ -14,6 +14,7 @@ syn match bujoPriorityTodo "^\s*\[\*\] .*$"
 syn match bujoEvent "^\s*o .*$"
 syn match bujoNote "^\s*\(-\|\d*\.\) .*$"
 syn match bujoReject "^\s*\~ .*$"
+syn match bujoHyperlink "\[\[http\S\+\]\]" conceal cchar=H
 
 let b:current_syntax = "bujo"
 
@@ -23,4 +24,7 @@ hi def link bujoTodo         Statement
 hi def link bujoEvent        Constant
 hi def link bujoTodone       Comment
 hi def Strikeout ctermbg=darkblue ctermfg=black guibg=darkblue guifg=blue
+hi def link bujoUnderline Type
+hi bujoUnderline term=underline,bold cterm=underline,bold gui=underline,bold
 hi link bujoReject Strikeout
+hi link bujoHyperlink bujoUnderline

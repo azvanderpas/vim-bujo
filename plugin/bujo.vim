@@ -97,7 +97,7 @@ function s:OpenMonth(mods, ...)
     let y = strftime("%Y")
     let m = strftime("%B")
     call writefile([m . " " . y], month_path)
-    let ndays = substitute(readfile(g:bujo#templates_file_path . "\\md.months")[0], ".*". m ."[A-z|]\\+\\s\\(\\d\\+\\).*","\\1", 'g')
+    let ndays = substitute(readfile(g:bujo#templates_file_path . "\\md.months")[0], ".*". m ."[A-z|]*\\s\\(\\d\\+\\).*","\\1", 'g')
     if m == "February" && y % 4 == 0 && (y % 100 != 0 || y % 400 == 0)
       "leap years
       let ndays = ndays + 1
