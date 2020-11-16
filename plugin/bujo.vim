@@ -48,16 +48,7 @@ endfunction
 " If we are passed an argument, it means that the user wants to open the
 " general bujo file, so we also return the general file path in that case
 function s:GetBujoFilePath(general, section)
-  if a:general || !s:InGitRepository()
-    return g:bujo#todo_file_path . "/" . a:section . ".md"
-  else
-    let repo_name = s:GetToplevelFolder()
-    let todo_path = g:bujo#todo_file_path . "/" . repo_name
-    if empty(glob(todo_path))
-      call mkdir(todo_path)
-    endif
-    return todo_path . "/" . a:section . ".md"
-  endif
+  return g:bujo#todo_file_path . "/" . a:section . ".md"
 endfunction
 
 
@@ -81,8 +72,71 @@ function s:OpenTodo(mods, ...)
     call writefile(f, todo_path, 'B')
   else
     let f = readfile(todo_path)
+    let arr = [d]
     if index(f, d) == -1
-      let w = f[0:5] +  [d] + f[6:]
+      "Add habits after a new date
+      for l in readfile(s:GetBujoFilePath(general_bool, "Habits"))
+        if l[0] == '#'
+          "Comment line
+          continue
+        endif
+        let habit     = split(l)
+        let startDate = split(habit[0], '/')
+        let endDate   = split(habit[2], '/')
+        let curDate   = split(d, '/')
+        "Verify current date is in range
+        "year month date ordering
+        let curDateStr   = ""
+        let startDateStr = ""
+        let endDateStr   = ""
+        for i in [2, 0, 1]
+          let curDateStr   = curDateStr . curDate[i]
+          let startDateStr = startDateStr . startDate[i]
+          let endDateStr   = endDateStr . endDate[i]
+        endfor
+        if curDateStr < startDateStr || curDateStr > endDateStr
+          continue
+        endif
+        if strlen(habit[1]) == 1
+          let mult = 1
+          let ch = habit[1][0]
+        else
+          let mult = habit[1][0]
+          let ch = habit[1][1]
+        endif
+        if ch == 'd'
+          let interval = [0,mult*1,0]
+        elseif ch == 'w'
+          let interval = [0,mult*7,0]
+        elseif ch == 'm'
+          let interval = [mult,0,0]
+        elseif ch == 'y'
+          let interval = [0,0,mult]
+        else
+          continue
+        endif
+
+        while curDateStr > startDateStr
+
+          let isoStr = printf("%04d-%02d-%02d",
+                \  (startDate[2] + interval[2] + (startDate[0] + interval[0]) / 13),
+                \  (((startDate[0] + interval[0]-1) % 12)+1),
+                \  startDate[1])
+          let cmdStr = "python " . g:bujo#todo_file_path . "/" . "dateAdd.py " . isoStr . " " . interval[1]
+          let startDate = split(system(cmdStr), '/')
+          let startDateStr = ""
+          for i in [2, 0, 1]
+            let startDateStr = startDateStr . startDate[i]
+          endfor
+
+          if curDateStr == startDateStr
+            let arr += [ "  " . join(habit[3:])]
+          endif
+
+        endwhile
+
+      endfor
+      let w = f[0:5] +  arr + f[6:]
       call writefile(w, todo_path, 'B')
     endif
   endif
@@ -115,12 +169,34 @@ function s:OpenFutureLog(mods, ...)
   let future_log_path = s:GetBujoFilePath(general_bool, "FutureLog")
   if empty(glob(future_log_path))
     call writefile(readfile(g:bujo#templates_file_path . "\\md.futurelog"), future_log_path)
-    for i in range(0, 11)
+    for i in range(11)
       call writefile([strftime("%B %Y", localtime()-((strftime("%d")-1-i*32)*24*60*60)) ], future_log_path, 'a')
     endfor
+  else
+    let arr = []
+    for i in range(12,0,-1)
+      let d = strftime("%B %Y", localtime()-((strftime("%d")-1-i*32)*24*60*60))
+      let addDate = match(readfile(future_log_path), "\\s*" . d . "\\s*")
+      if addDate == -1
+        let arr = [d] + arr
+      else
+        break
+      endif
+    endfor
+    call writefile(arr, future_log_path, 'a')
   endif
   exe a:mods . " " . g:bujo#window_width "vs  " . future_log_path
+  " Move cursor to current month
   execute "normal /" . strftime("%B %Y") . "\<CR>"
+endfunction
+
+function s:OpenHabits(mods, ...)
+  let general_bool = a:0
+  let habits_path = s:GetBujoFilePath(1, "Habits")
+  if empty(glob(habits_path))
+    call writefile(readfile(g:bujo#templates_file_path . "\\md.habits"), habits_path)
+  endif
+  exe a:mods . " " . g:bujo#window_width "vs  " . habits_path
 endfunction
 
 if !exists(":Todo")
@@ -133,6 +209,10 @@ endif
 
 if !exists(":FutureLog")
   command -nargs=? FutureLog :call s:OpenFutureLog(<q-mods>, <f-args>)
+endif
+
+if !exists(":Habits")
+  command -nargs=? Habits :call s:OpenHabits(<q-mods>, <f-args>)
 endif
 
 
