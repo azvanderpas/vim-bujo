@@ -74,68 +74,9 @@ function s:OpenTodo(mods, ...)
     let f = readfile(todo_path)
     let arr = [d]
     if index(f, d) == -1
-      "Add habits after a new date
-      for l in readfile(s:GetBujoFilePath(general_bool, "Habits"))
-        if l[0] == '#'
-          "Comment line
-          continue
-        endif
-        let habit     = split(l)
-        let startDate = split(habit[0], '/')
-        let endDate   = split(habit[2], '/')
-        let curDate   = split(d, '/')
-        "Verify current date is in range
-        "year month date ordering
-        let curDateStr   = ""
-        let startDateStr = ""
-        let endDateStr   = ""
-        for i in [2, 0, 1]
-          let curDateStr   = curDateStr . curDate[i]
-          let startDateStr = startDateStr . startDate[i]
-          let endDateStr   = endDateStr . endDate[i]
-        endfor
-        if curDateStr < startDateStr || curDateStr > endDateStr
-          continue
-        endif
-        if strlen(habit[1]) == 1
-          let mult = 1
-          let ch = habit[1][0]
-        else
-          let mult = habit[1][0]
-          let ch = habit[1][1]
-        endif
-        if ch == 'd'
-          let interval = [0,mult*1,0]
-        elseif ch == 'w'
-          let interval = [0,mult*7,0]
-        elseif ch == 'm'
-          let interval = [mult,0,0]
-        elseif ch == 'y'
-          let interval = [0,0,mult]
-        else
-          continue
-        endif
-
-        while curDateStr > startDateStr
-
-          let isoStr = printf("%04d-%02d-%02d",
-                \  (startDate[2] + interval[2] + (startDate[0] + interval[0]) / 13),
-                \  (((startDate[0] + interval[0]-1) % 12)+1),
-                \  startDate[1])
-          let cmdStr = "python " . g:bujo#todo_file_path . "/" . "dateAdd.py " . isoStr . " " . interval[1]
-          let startDate = split(system(cmdStr), '/')
-          let startDateStr = ""
-          for i in [2, 0, 1]
-            let startDateStr = startDateStr . startDate[i]
-          endfor
-
-          if curDateStr == startDateStr
-            let arr += [ "  " . join(habit[3:])]
-          endif
-
-        endwhile
-
-      endfor
+      let cmdStr = "python " . g:bujo#todo_file_path . "/" . "habitUpdate.py"
+      let habits = split(system(cmdStr), '\n')
+      let arr += habits
       let w = f[0:5] +  arr + f[6:]
       call writefile(w, todo_path, 'B')
     endif
